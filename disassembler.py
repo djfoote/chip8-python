@@ -7,6 +7,8 @@ def disassemble_rom(rom):
 
 	pc = 0x200
 	memory = [0x00] * pc + list(code_buffer)
+	if len(memory) % 2 == 1:
+		memory.append(0b0)
 
 	while pc < len(memory):
 		pc_string = format(pc, '04x')
