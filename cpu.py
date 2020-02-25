@@ -272,7 +272,14 @@ class Chip8InputHandler(object):
 		return pressed_chip8_keys
 
 	def wait_for_keypress(self):
-		return 0x0
+		while True:
+			event = pygame.event.wait()
+			if event.type == pygame.QUIT:
+				sys.exit()
+			elif event.type == pygame.KEYDOWN:
+				for candidate_key in range(0x10):
+					if event.key == KEY_MAPPING[candidate_key]:
+						return candidate_key
 
 
 class Chip8Session(object):
@@ -292,6 +299,8 @@ class Chip8Session(object):
 				break
 			if pygame.event.get(TIMER_EVENT):
 				self.cpu.decrement_timers()
+			pygame.event.pump()
+
 			return_code = self.cpu.execute_instruction()
 			if return_code:
 				break
