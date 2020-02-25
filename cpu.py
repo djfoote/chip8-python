@@ -3,15 +3,19 @@ import itertools
 import random
 import sys
 
-import drawille
 import pygame
 
 import disassembler
 
+MEMORY_SIZE = 0x1000
+PC_START = 0x200
 SPRITE_WIDTH = 8
 TIMER_PERIOD = 1000 // 60
 SCREEN_WIDTH = 64
 SCREEN_HEIGHT = 32
+PIXEL_SIZE = 10
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
 
 TIMER_EVENT = pygame.USEREVENT + 1
 
@@ -35,8 +39,10 @@ class Chip8CPU(object):
 		with open(rom_path, 'rb') as f:
 			code_buffer = f.read()
 
-		self.pc = 0x200
-		self.memory = [0x00] * self.pc + list(code_buffer)
+		self.pc = PC_START
+		self.memory = [0b0] * MEMORY_SIZE
+		for byte_number, byte in enumerate(code_buffer):
+			self.memory[self.pc + byte_number] = byte
 
 	def decrement_timers(self):
 		if self.delay_timer:
@@ -45,6 +51,9 @@ class Chip8CPU(object):
 			self.sound_timer -= 1
 
 	def execute_instruction(self):
+		if self.pc >= MEMORY_SIZE - 1:
+			return 1
+
 		opcode = (self.memory[self.pc] << 8) + self.memory[self.pc + 1]
 
 		first_nibble = opcode >> 12
@@ -59,7 +68,7 @@ class Chip8CPU(object):
 		if first_nibble == 0x0:
 			if opcode == 0x00E0:
 				self.clear_screen()
-				return True
+				self.screen.flush()
 			elif opcode == 0x00EE:
 				self.pc = self.stack.pop()
 			else:
@@ -89,6 +98,7 @@ class Chip8CPU(object):
 
 		elif first_nibble == 0x7:
 			self.registers[x] += nn
+			self.registers[x] &= 0xFF
 
 		elif first_nibble == 0x8:
 			if n == 0x0:
@@ -140,7 +150,7 @@ class Chip8CPU(object):
 			sprite = self.memory[self.address_register : self.address_register + n]
 			collision = self.screen.draw_sprite(col_anchor, row_anchor, sprite)
 			self.registers[0xF] = int(collision)
-			return True
+			self.screen.flush()
 
 		elif first_nibble == 0xE:
 			if nn == 0x9E:
@@ -185,25 +195,31 @@ class Chip8CPU(object):
 		else:
 			raise ValueError('Memory is not a list of bytes.')
 
-		return False
+		return 0
 
 
 class Chip8Screen(object):
 	def __init__(self):
-		self.canvas = drawille.Canvas()
+		self.screen = pygame.display.set_mode((SCREEN_WIDTH * PIXEL_SIZE,
+		                                       SCREEN_HEIGHT * PIXEL_SIZE))
+		self.clear()
 
-	def flush(self, stdscr):
-		stdscr.addstr(0, 0, self.canvas.frame())
-		stdscr.refresh()
+	def flush(self):
+		pygame.display.flip()
 
 	def clear(self):
-		self.canvas.clear()
+		self.bitmap = [[False] * SCREEN_HEIGHT for _ in range(SCREEN_WIDTH)]
+		self.screen.fill(BLACK)
 
 	def get_pixel(self, x, y):
-		return self.canvas.get(x, y)
+		return self.bitmap[x][y]
 
 	def toggle_pixel(self, x, y):
-		self.canvas.toggle(x, y)
+		self.bitmap[x][y] ^= 1
+		color = WHITE if self.bitmap[x][y] else BLACK
+		pygame.draw.rect(self.screen, color,
+		                 pygame.Rect(x * PIXEL_SIZE, y * PIXEL_SIZE,
+		                             PIXEL_SIZE, PIXEL_SIZE))
 
 	def draw_sprite(self, x_anchor, y_anchor, sprite):
 		collision = False
@@ -226,13 +242,13 @@ def is_on_screen(x, y):
 KEY_MAPPING = {
 	0x0: pygame.K_0,
 	0x1: pygame.K_1,
-	0x2: pygame.K_2,
+	0x2: pygame.K_w,
 	0x3: pygame.K_3,
-	0x4: pygame.K_4,
+	0x4: pygame.K_a,
 	0x5: pygame.K_5,
-	0x6: pygame.K_6,
+	0x6: pygame.K_d,
 	0x7: pygame.K_7,
-	0x8: pygame.K_8,
+	0x8: pygame.K_s,
 	0x9: pygame.K_9,
 	0xA: pygame.K_a,
 	0xB: pygame.K_b,
@@ -269,15 +285,16 @@ class Chip8Session(object):
 
 	def start(self):
 		pygame.init()
-		curses.initscr()
-		curses.curs_set(0)
-		curses.wrapper(self._run_game)
+		pygame.time.set_timer(TIMER_EVENT, TIMER_PERIOD)
 
-	def _run_game(self, stdscr):
 		while True:
-			refresh_screen = self.cpu.execute_instruction()
-			if refresh_screen:
-				self.screen.flush(stdscr)
+			if pygame.event.get(pygame.QUIT):
+				break
+			if pygame.event.get(TIMER_EVENT):
+				self.cpu.decrement_timers()
+			return_code = self.cpu.execute_instruction()
+			if return_code:
+				break
 
 
 if __name__ == '__main__':

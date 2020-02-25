@@ -7,7 +7,6 @@ verify_ssl = true
 
 [packages]
 pygame = "==2.0.0.dev6"
-drawille = "*"
 
 [requires]
 python_version = "3.8"
