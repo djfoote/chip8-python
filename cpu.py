@@ -5,8 +5,6 @@ import sys
 
 import pygame
 
-import disassembler
-
 MEMORY_SIZE = 0x1000
 PC_START = 0x200
 SPRITE_WIDTH = 8
@@ -22,10 +20,11 @@ WHITE = (255, 255, 255)
 TIMER_EVENT = pygame.USEREVENT + 1
 
 FONT_FILENAME = 'font/font.ch8'
+BEEP_FILENAME = 'sound/beep.wav'
 
 
 class Chip8CPU(object):
-	def __init__(self, screen, input_handler):
+	def __init__(self, screen, input_handler, sound_handler):
 		self.memory = []
 		self.pc = PC_START
 		self.registers = [0x0] * 0x10
@@ -35,6 +34,7 @@ class Chip8CPU(object):
 		self.sound_timer = 0
 		self.screen = screen
 		self.input_handler = input_handler
+		self.sound_handler = sound_handler
 
 		self.memory = [0b0] * MEMORY_SIZE
 
@@ -56,7 +56,10 @@ class Chip8CPU(object):
 		if self.delay_timer:
 			self.delay_timer -= 1
 		if self.sound_timer:
+			self.sound_handler.play()
 			self.sound_timer -= 1
+			if not self.sound_timer:
+				self.sound_handler.stop()
 
 	def execute_instruction(self):
 		if self.pc >= MEMORY_SIZE - 1:
@@ -268,9 +271,6 @@ KEY_MAPPING = {
 
 
 class Chip8InputHandler(object):
-	def __init__(self):
-		pass
-
 	def get_pressed_keys(self):
 		pressed_keyboard_keys = pygame.key.get_pressed()
 		pressed_chip8_keys = set()
@@ -290,12 +290,30 @@ class Chip8InputHandler(object):
 						return candidate_key
 
 
+class Chip8SoundHandler(object):
+	def __init__(self):
+		pygame.mixer.init()
+		pygame.mixer.music.load(BEEP_FILENAME)
+		self.is_playing = False
+
+	def play(self):
+		if not self.is_playing:
+			pygame.mixer.music.play(-1)
+			self.is_playing = True
+
+	def stop(self):
+		if self.is_playing:
+			pygame.mixer.music.stop()
+			self.is_playing = False
+
+
 class Chip8Session(object):
 	def __init__(self, rom_path):
 		self.screen = Chip8Screen()
 		self.input_handler = Chip8InputHandler()
+		self.sound_handler = Chip8SoundHandler()
 
-		self.cpu = Chip8CPU(self.screen, self.input_handler)
+		self.cpu = Chip8CPU(self.screen, self.input_handler, self.sound_handler)
 		self.cpu.load_font()
 		self.cpu.load_rom(rom_path)
 
