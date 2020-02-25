@@ -11,11 +11,15 @@ def disassemble_rom(rom):
 		memory.append(0b0)
 
 	while pc < len(memory):
-		pc_string = format(pc, '04x')
-		opcode_string = format(memory[pc], '02x') + format(memory[pc+1], '02x')
-		disassembled_string = disassemble_op(memory, pc)
-		print(f'{pc_string} {opcode_string} {disassembled_string}')
+		print(get_disassembled_line(memory, pc))
 		pc += 2
+
+
+def get_disassembled_line(memory, pc):
+	pc_string = format(pc, '04x')
+	opcode_string = format(memory[pc], '02x') + format(memory[pc+1], '02x')
+	disassembled_string = disassemble_op(memory, pc)
+	return f'{pc_string} {opcode_string} {disassembled_string}'
 
 
 def disassemble_op(memory, pc):
