@@ -10,6 +10,8 @@ import disassembler
 MEMORY_SIZE = 0x1000
 PC_START = 0x200
 SPRITE_WIDTH = 8
+FONT_SPRITE_SIZE = 5
+FONT_MEMORY_LOCATION = 0x0
 TIMER_PERIOD = 1000 // 60
 SCREEN_WIDTH = 64
 SCREEN_HEIGHT = 32
@@ -19,11 +21,13 @@ WHITE = (255, 255, 255)
 
 TIMER_EVENT = pygame.USEREVENT + 1
 
+FONT_FILENAME = 'font/font.ch8'
+
 
 class Chip8CPU(object):
 	def __init__(self, screen, input_handler):
 		self.memory = []
-		self.pc = 0x0
+		self.pc = PC_START
 		self.registers = [0x0] * 0x10
 		self.address_register = 0x0
 		self.stack = []
@@ -32,17 +36,21 @@ class Chip8CPU(object):
 		self.screen = screen
 		self.input_handler = input_handler
 
+		self.memory = [0b0] * MEMORY_SIZE
+
 	def clear_screen(self):
 		self.screen.clear()
 
-	def load_rom(self, rom_path):
+	def load_rom(self, rom_path, is_font=False):
 		with open(rom_path, 'rb') as f:
 			code_buffer = f.read()
 
-		self.pc = PC_START
-		self.memory = [0b0] * MEMORY_SIZE
+		program_start = FONT_MEMORY_LOCATION if is_font else PC_START
 		for byte_number, byte in enumerate(code_buffer):
-			self.memory[self.pc + byte_number] = byte
+			self.memory[program_start + byte_number] = byte
+
+	def load_font(self, rom_path=FONT_FILENAME):
+		self.load_rom(rom_path, is_font=True)
 
 	def decrement_timers(self):
 		if self.delay_timer:
@@ -176,8 +184,8 @@ class Chip8CPU(object):
 				self.registers[0xF] = int(self.address_register > 0xFFF)
 				self.address_register &= 0xFFF
 			elif nn == 0x29:
-				# TODO: handle fonts (I = sprite_address[V{x}])
-				self.address_register = 0x000
+				relative_address = self.registers[x] * FONT_SPRITE_SIZE
+				self.address_register = FONT_MEMORY_LOCATION + relative_address
 			elif nn == 0x33:
 				number = self.registers[x]
 				self.memory[self.address_register] = (number // 100) % 10
@@ -288,11 +296,12 @@ class Chip8Session(object):
 		self.input_handler = Chip8InputHandler()
 
 		self.cpu = Chip8CPU(self.screen, self.input_handler)
+		self.cpu.load_font()
 		self.cpu.load_rom(rom_path)
 
 	def start(self):
 		pygame.init()
-		pygame.time.set_timer(TIMER_EVENT, TIMER_PERIOD)
+		pygame.time.set_timer(TIMER_EVENT, TIMER_PERIOD) 
 
 		while True:
 			if pygame.event.get(pygame.QUIT):
