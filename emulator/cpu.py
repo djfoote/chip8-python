@@ -1,5 +1,3 @@
-import curses
-import itertools
 import random
 import sys
 
@@ -7,20 +5,8 @@ import pygame
 
 MEMORY_SIZE = 0x1000
 PC_START = 0x200
-SPRITE_WIDTH = 8
 FONT_SPRITE_SIZE = 5
 FONT_MEMORY_LOCATION = 0x0
-TIMER_PERIOD = 1000 // 60
-SCREEN_WIDTH = 64
-SCREEN_HEIGHT = 32
-PIXEL_SIZE = 10
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-
-TIMER_EVENT = pygame.USEREVENT + 1
-
-FONT_FILENAME = 'font/font.ch8'
-BEEP_FILENAME = 'sound/beep.wav'
 
 
 class Chip8CPU(object):
@@ -49,7 +35,7 @@ class Chip8CPU(object):
 		for byte_number, byte in enumerate(code_buffer):
 			self.memory[program_start + byte_number] = byte
 
-	def load_font(self, rom_path=FONT_FILENAME):
+	def load_font(self, rom_path):
 		self.load_rom(rom_path, is_font=True)
 
 	def decrement_timers(self):
@@ -207,134 +193,3 @@ class Chip8CPU(object):
 			raise ValueError('Memory is not a list of bytes.')
 
 		return 0
-
-
-class Chip8Screen(object):
-	def __init__(self):
-		self.screen = pygame.display.set_mode((SCREEN_WIDTH * PIXEL_SIZE,
-		                                       SCREEN_HEIGHT * PIXEL_SIZE))
-		self.clear()
-
-	def flush(self):
-		pygame.display.flip()
-
-	def clear(self):
-		self.bitmap = [[False] * SCREEN_HEIGHT for _ in range(SCREEN_WIDTH)]
-		self.screen.fill(BLACK)
-
-	def get_pixel(self, x, y):
-		return self.bitmap[x][y]
-
-	def toggle_pixel(self, x, y):
-		self.bitmap[x][y] ^= 1
-		color = WHITE if self.bitmap[x][y] else BLACK
-		pygame.draw.rect(self.screen, color,
-		                 pygame.Rect(x * PIXEL_SIZE, y * PIXEL_SIZE,
-		                             PIXEL_SIZE, PIXEL_SIZE))
-
-	def draw_sprite(self, x_anchor, y_anchor, sprite):
-		collision = False
-		for y_offset in range(len(sprite)):
-			for x_offset in range(SPRITE_WIDTH):
-				complement = SPRITE_WIDTH - x_offset - 1
-				sprite_pixel = (sprite[y_offset] & (1 << complement)) >> complement
-				x, y = x_anchor + x_offset, y_anchor + y_offset
-				if sprite_pixel and is_on_screen(x, y):
-					prev_pixel = self.get_pixel(x, y)
-					self.toggle_pixel(x, y)
-					collision |= prev_pixel & sprite_pixel
-		return collision
-
-
-def is_on_screen(x, y):
-	return x >= 0 and x < SCREEN_WIDTH and y >= 0 and y < SCREEN_HEIGHT
-
-
-KEY_MAPPING = {
-	0x0: pygame.K_0,
-	0x1: pygame.K_1,
-	0x2: pygame.K_2,
-	0x3: pygame.K_3,
-	0x4: pygame.K_4,
-	0x5: pygame.K_5,
-	0x6: pygame.K_6,
-	0x7: pygame.K_7,
-	0x8: pygame.K_8,
-	0x9: pygame.K_9,
-	0xA: pygame.K_a,
-	0xB: pygame.K_b,
-	0xC: pygame.K_c,
-	0xD: pygame.K_d,
-	0xE: pygame.K_e,
-	0xF: pygame.K_f,
-}
-
-
-class Chip8InputHandler(object):
-	def get_pressed_keys(self):
-		pressed_keyboard_keys = pygame.key.get_pressed()
-		pressed_chip8_keys = set()
-		for chip8_key, keyboard_key in KEY_MAPPING.items():
-			if pressed_keyboard_keys[keyboard_key]:
-				pressed_chip8_keys.add(chip8_key)
-		return pressed_chip8_keys
-
-	def wait_for_keypress(self):
-		while True:
-			event = pygame.event.wait()
-			if event.type == pygame.QUIT:
-				sys.exit()
-			elif event.type == pygame.KEYDOWN:
-				for candidate_key in range(0x10):
-					if event.key == KEY_MAPPING[candidate_key]:
-						return candidate_key
-
-
-class Chip8SoundHandler(object):
-	def __init__(self):
-		pygame.mixer.init()
-		pygame.mixer.music.load(BEEP_FILENAME)
-		self.is_playing = False
-
-	def play(self):
-		if not self.is_playing:
-			pygame.mixer.music.play(-1)
-			self.is_playing = True
-
-	def stop(self):
-		if self.is_playing:
-			pygame.mixer.music.stop()
-			self.is_playing = False
-
-
-class Chip8Session(object):
-	def __init__(self, rom_path):
-		self.screen = Chip8Screen()
-		self.input_handler = Chip8InputHandler()
-		self.sound_handler = Chip8SoundHandler()
-
-		self.cpu = Chip8CPU(self.screen, self.input_handler, self.sound_handler)
-		self.cpu.load_font()
-		self.cpu.load_rom(rom_path)
-
-	def start(self):
-		pygame.init()
-		pygame.time.set_timer(TIMER_EVENT, TIMER_PERIOD) 
-
-		while True:
-			if pygame.event.get(pygame.QUIT):
-				break
-			if pygame.event.get(TIMER_EVENT):
-				self.cpu.decrement_timers()
-			pygame.event.pump()
-
-			return_code = self.cpu.execute_instruction()
-			if return_code:
-				break
-
-
-if __name__ == '__main__':
-	rom_path = sys.argv[1]
-
-	session = Chip8Session(rom_path)
-	session.start()
