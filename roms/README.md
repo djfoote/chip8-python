@@ -1,0 +1,1 @@
+A pack of Chip8 ROMs found at [Zophar's Domain](https://www.zophar.net/pdroms/chip8/chip-8-games-pack.html), included here for convenience. They all run, but I don't understand what some of them are supposed to do/how to play.
